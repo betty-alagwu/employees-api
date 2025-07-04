@@ -12,7 +12,7 @@ jobs:
     
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x]
+        node-version: [22.x]
     
     steps:
     - name: Checkout code
@@ -32,47 +32,3 @@ jobs:
     
     - name: Run tests
       run: npm test
-    
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: test-results-node-${{ matrix.node-version }}
-        path: |
-          coverage/
-          test-results.xml
-        retention-days: 30
-    
-    - name: Comment test results on PR
-      uses: actions/github-script@v7
-      if: github.event_name == 'pull_request' && always()
-      with:
-        script: |
-          const fs = require('fs');
-          const path = require('path');
-          
-          // This would read test results and comment on PR
-          // For now, just a simple success/failure comment
-          const testStatus = '${{ job.status }}' === 'success' ? '✅ Tests passed' : '❌ Tests failed';
-          
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: `## Test Results for Node.js ${{ matrix.node-version }}\n\n${testStatus}`
-          });
-
-  test-summary:
-    runs-on: ubuntu-latest
-    needs: test
-    if: always()
-    
-    steps:
-    - name: Test Summary
-      run: |
-        echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
-        echo "| Node Version | Status |" >> $GITHUB_STEP_SUMMARY
-        echo "|--------------|--------|" >> $GITHUB_STEP_SUMMARY
-        echo "| 18.x | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| 20.x | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| 22.x | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY

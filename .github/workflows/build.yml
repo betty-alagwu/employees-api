@@ -63,78 +63,11 @@ jobs:
         kill $SERVER_PID
         echo "Built application test completed successfully!"
 
-  build-docker:
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: build-artifacts-node-20.x
-        path: ./
-    
-    - name: Create Dockerfile
-      run: |
-        cat > Dockerfile << 'EOF'
-        FROM node:20-alpine
-        
-        WORKDIR /app
-        
-        # Copy package files
-        COPY package*.json ./
-        
-        # Install production dependencies only
-        RUN npm ci --only=production && npm cache clean --force
-        
-        # Copy built application
-        COPY dist/ ./dist/
-        
-        # Create non-root user
-        RUN addgroup -g 1001 -S nodejs && \
-            adduser -S nodejs -u 1001
-        
-        USER nodejs
-        
-        EXPOSE 3000
-        
-        CMD ["node", "dist/main.js"]
-        EOF
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Build Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: false
-        tags: employee-crud-api:latest
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
-    - name: Test Docker image
-      run: |
-        docker run -d --name test-container -p 3000:3000 employee-crud-api:latest
-        sleep 10
-        
-        # Test health endpoint
-        curl -f http://localhost:3000/health || exit 1
-        
-        # Cleanup
-        docker stop test-container
-        docker rm test-container
-        echo "Docker image test completed successfully!"
-
   build-summary:
     runs-on: ubuntu-latest
-    needs: [build, build-docker]
+    needs: build
     if: always()
-    
+
     steps:
     - name: Build Summary
       run: |
@@ -142,10 +75,10 @@ jobs:
         echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
         echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
         echo "| Application Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Docker Build | ${{ needs.build-docker.result }} |" >> $GITHUB_STEP_SUMMARY
-        
-        if [ "${{ needs.build.result }}" = "success" ] && [ "${{ needs.build-docker.result }}" = "success" ]; then
-          echo "✅ All builds completed successfully!" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ needs.build.result }}" = "success" ]; then
+          echo "✅ Application build completed successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "🐳 Docker build will run separately on main branch pushes" >> $GITHUB_STEP_SUMMARY
         else
-          echo "❌ Some builds failed. Please check the logs." >> $GITHUB_STEP_SUMMARY
+          echo "❌ Application build failed. Please check the logs." >> $GITHUB_STEP_SUMMARY
         fi
